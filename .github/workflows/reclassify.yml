@@ -4,8 +4,11 @@ name: IPTV 直播源过滤（平表生成）
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 2, * * *'
+    - cron: '0 3,10 * * *'
   workflow_dispatch:  # 允许手动触发
+
+permissions:
+  contents: write
 
 jobs:
   filter-iptv:
