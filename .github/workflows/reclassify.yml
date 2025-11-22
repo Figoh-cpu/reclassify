@@ -2,8 +2,8 @@ name: Reclassify IPTV Channels
 
 on:
   schedule:
-    # 北京时间每天上午10点、下午5点自动运行
-    - cron: '0 2,9 * * *'
+    # 北京时间每天上午10点、下午7点自动运行
+    - cron: '0 2,11 * * *'
   workflow_dispatch:  # 允许手动触发
 
 permissions:
