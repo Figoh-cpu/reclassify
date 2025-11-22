@@ -4,10 +4,14 @@ import subprocess
 import tempfile
 import os
 import re
+import signal
+
+def timeout_handler(signum, frame):
+    raise TimeoutError("FFprobe timeout")
 
 def download_file(url):
     """下载原始文件"""
-    response = requests.get(url)
+    response = requests.get(url, timeout=30)
     response.raise_for_status()
     return response.text
 
@@ -21,7 +25,7 @@ def process_content(content):
     # 2. 删除所有包含"-组播"的行
     lines = [line for line in lines if '-组播' not in line]
     
-    return lines
+    return [line for line in lines if line.strip()]
 
 def parse_groups(lines):
     """解析分组"""
@@ -40,30 +44,45 @@ def parse_groups(lines):
             groups[current_group] = []
         elif current_group and ',' in line:
             # 频道行：频道名称,播放地址
-            channel_name, channel_url = line.split(',', 1)
-            groups[current_group].append((channel_name, channel_url))
+            parts = line.split(',', 1)
+            if len(parts) == 2:
+                channel_name, channel_url = parts
+                groups[current_group].append((channel_name, channel_url))
     
     return groups
 
 def check_stream_validity(url, timeout=5):
     """使用ffprobe检查流有效性"""
     try:
+        # 设置超时处理
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout + 2)
+        
         cmd = [
             'ffprobe', 
-            '-v', 'error',
+            '-v', 'quiet',
             '-show_entries', 'format=duration',
             '-of', 'default=noprint_wrappers=1:nokey=1',
-            '-timeout', str(timeout * 1000000),  # 微秒
             url
         ]
+        
         result = subprocess.run(
             cmd, 
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE,
-            timeout=timeout + 2
+            timeout=timeout
         )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+        
+        # 取消警报
+        signal.alarm(0)
+        
+        return result.returncode == 0 and result.stdout.strip()
+        
+    except (subprocess.TimeoutExpired, TimeoutError):
+        print(f"超时: {url}")
+        return False
+    except Exception as e:
+        print(f"检测错误 {url}: {e}")
         return False
 
 def filter_valid_groups(groups):
@@ -81,9 +100,9 @@ def filter_valid_groups(groups):
         
         if check_stream_validity(first_channel_url):
             valid_groups[group_name] = channels
-            print(f"分组 '{group_name}' 有效，保留")
+            print(f"✓ 分组 '{group_name}' 有效，保留")
         else:
-            print(f"分组 '{group_name}' 无效，删除")
+            print(f"✗ 分组 '{group_name}' 无效，删除")
     
     return valid_groups
 
@@ -109,6 +128,7 @@ def main():
         
         print("处理内容...")
         lines = process_content(content)
+        print(f"原始行数: {len(lines)}")
         
         print("解析分组...")
         groups = parse_groups(lines)
@@ -125,7 +145,8 @@ def main():
         with open('reclassify.txt', 'w', encoding='utf-8') as f:
             f.write(output_content)
         
-        print(f"完成！生成 reclassify.txt，包含 {len(output_content.splitlines())} 个频道")
+        channel_count = len(output_content.splitlines())
+        print(f"完成！生成 reclassify.txt，包含 {channel_count} 个频道")
         
     except Exception as e:
         print(f"错误: {e}")
