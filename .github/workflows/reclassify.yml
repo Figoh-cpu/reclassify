@@ -4,7 +4,8 @@ name: IPTV 直播源过滤（平表生成）
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 1'  # 每周一 UTC 0点运行（可调整时区）
+    - cron: '0 2, * * *'
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   filter-iptv:
