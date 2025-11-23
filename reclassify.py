@@ -89,35 +89,80 @@ def parse_groups(lines):
     
     return groups
 
-def check_stream(url, timeout=5):
+def check_stream(url, timeout=8):
     """
-    使用ffprobe检查流有效性
+    优化的流检测函数，使用详细的ffprobe参数
     """
     debug_log(f"  检测流: {url}")
     
     try:
+        # 使用更详细的ffprobe参数来检测流信息
         result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_streams", "-i", url],
+            [
+                "ffprobe", 
+                "-v", "error",           # 只显示错误信息
+                "-analyzeduration", "3000000",  # 分析时长3秒
+                "-probesize", "100000",  # 探测数据大小
+                "-select_streams", "v:0",  # 只检测第一个视频流
+                "-show_entries", "format=duration,bit_rate:stream=codec_type,codec_name,width,height,pix_fmt", 
+                "-of", "csv=p=0",        # 输出格式为CSV
+                "-timeout", "8000000",   # 超时8秒（微秒）
+                "-i", url
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=timeout + 2
+            timeout=timeout + 3
         )
         
-        # 如果输出中包含"codec_type"，则认为流有效
-        is_valid = b"codec_type" in result.stdout
+        stdout_str = result.stdout.decode('utf-8', errors='ignore').strip()
+        stderr_str = result.stderr.decode('utf-8', errors='ignore')
         
-        if is_valid:
-            debug_log(f"    ✓ 流有效")
+        # 详细分析检测结果
+        if stdout_str:
+            debug_log(f"    检测到流信息: {stdout_str}")
+            
+            # 检查是否包含视频流
+            if "video" in stdout_str:
+                # 提取视频编码信息
+                if "h264" in stdout_str or "hevc" in stdout_str or "mpeg2" in stdout_str:
+                    debug_log(f"    ✓ 流有效 - 检测到标准视频编码")
+                    return True
+                else:
+                    debug_log(f"    ⚠ 流可能有效 - 检测到视频但编码不常见: {stdout_str}")
+                    return True  # 仍然认为是有效的
+            else:
+                debug_log(f"    ✗ 流无效 - 未检测到视频流")
+                return False
         else:
-            debug_log(f"    ✗ 流无效")
-            if result.stderr:
-                error_msg = result.stderr.decode('utf-8', errors='ignore')[:100]
-                debug_log(f"    错误信息: {error_msg}")
-        
-        return is_valid
-        
+            # 如果没有标准输出，检查错误输出
+            if stderr_str:
+                error_lower = stderr_str.lower()
+                
+                # 分析错误类型
+                if "connection timed out" in error_lower:
+                    debug_log(f"    ✗ 连接超时")
+                elif "server returned 404" in error_lower or "not found" in error_lower:
+                    debug_log(f"    ✗ 资源不存在 (404)")
+                elif "connection refused" in error_lower:
+                    debug_log(f"    ✗ 连接被拒绝")
+                elif "end of file" in error_lower:
+                    debug_log(f"    ✗ 文件结束")
+                elif "invalid data" in error_lower:
+                    debug_log(f"    ✗ 无效数据")
+                else:
+                    # 截取错误信息的前100个字符
+                    error_preview = stderr_str[:100] + "..." if len(stderr_str) > 100 else stderr_str
+                    debug_log(f"    ✗ 检测失败: {error_preview}")
+            else:
+                debug_log(f"    ✗ 无流信息输出")
+            
+            return False
+            
     except subprocess.TimeoutExpired:
-        debug_log(f"    ✗ 检测超时")
+        debug_log(f"    ✗ 检测超时 ({timeout}s)")
+        return False
+    except FileNotFoundError:
+        debug_log(f"    ✗ ffprobe 未安装，请先安装FFmpeg")
         return False
     except Exception as e:
         debug_log(f"    ✗ 检测异常: {e}")
