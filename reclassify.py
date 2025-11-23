@@ -537,25 +537,25 @@ def categorize_channels(formatted_channels):
     uncategorized = []
     
     for channel_line in formatted_channels:
-        # 解析频道行 - 格式是: 频道名称,地址$所属组名
+        # 解析频道行 - 格式是: 频道名称,地址$地区运营商
         match = re.match(r'^([^,]+),([^$]+)\$([^$]+)$', channel_line)
         if not match:
             continue
             
-        channel_name, channel_url, group_name = match.groups()
+        channel_name, channel_url, region = match.groups()
         normalized_name = normalize_channel_name(channel_name)
         
         # 查找分类
         categorized_flag = False
         for category, channels in CATEGORY_MAPPING.items():
             if normalized_name in channels:
-                # 存储完整格式：频道名称,地址$所属组名
-                categorized[category].append(f'{normalized_name},{channel_url}${group_name}')
+                # 存储完整格式：频道名称,地址$地区运营商（不去除任何内容）
+                categorized[category].append(f'{normalized_name},{channel_url}${region}')
                 categorized_flag = True
                 break
         
         if not categorized_flag:
-            uncategorized.append(f'{channel_name},{channel_url}${group_name}')
+            uncategorized.append(f'{channel_name},{channel_url}${region}')
     
     print(f"分类完成: 已分类 {sum(len(channels) for channels in categorized.values())}, 未分类 {len(uncategorized)}")
     return categorized, uncategorized
