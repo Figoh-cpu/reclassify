@@ -589,6 +589,7 @@ def classify_channels(valid_groups, category_mapping, channel_name_mapping):
             continue
             
         channel_name, channel_url, group_name = match.groups()
+        original_channel_name = channel_name
         
         # 1. 首先检查频道名称是否直接匹配分类中的标准名称
         found_category = reverse_category_map.get(channel_name)
@@ -600,19 +601,28 @@ def classify_channels(valid_groups, category_mapping, channel_name_mapping):
             if standard_name:
                 # 使用映射后的标准名称查找分类
                 found_category = reverse_category_map.get(standard_name)
-                print(f"频道映射: '{channel_name}' -> '{standard_name}' -> '{found_category}'")
+                if found_category:
+                    print(f"频道映射: '{channel_name}' -> '{standard_name}' -> '{found_category}'")
+                else:
+                    print(f"频道映射失败: '{channel_name}' -> '{standard_name}' -> 未找到分类")
             else:
                 # 尝试模糊匹配
                 for standard_name in reverse_category_map.keys():
                     if standard_name.lower() in channel_name.lower() or channel_name.lower() in standard_name.lower():
                         found_category = reverse_category_map.get(standard_name)
-                        print(f"模糊匹配: '{channel_name}' -> '{standard_name}' -> '{found_category}'")
-                        break
+                        if found_category:
+                            print(f"模糊匹配: '{channel_name}' -> '{standard_name}' -> '{found_category}'")
+                            break
         
         # 3. 如果还没找到分类，放入"其他频道"
         if not found_category:
             found_category = "其他频道,#genre#"
             print(f"未分类频道: '{channel_name}'")
+        else:
+            # 使用标准化后的频道名称替换原始名称
+            if standard_name and standard_name != channel_name:
+                # 重新构建频道行，使用标准化名称
+                line = f"{standard_name},{channel_url}${group_name}"
         
         # 将完整的行添加到对应分类
         classified_channels[found_category].append(line)
