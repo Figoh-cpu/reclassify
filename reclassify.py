@@ -567,7 +567,7 @@ def categorize_channels(formatted_channels):
     return categorized, uncategorized
 
 def reclassify_reclassify_txt():
-    """对reclassify.txt进行重分类生成tv.txt"""
+    """对reclassify.txt进行重分类生成result.txt"""
     try:
         debug_log("=== 开始重分类 reclassify.txt ===")
         
@@ -601,8 +601,8 @@ def reclassify_reclassify_txt():
         # 生成北京时间
         beijing_time = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
         
-        # 生成tv.txt文件
-        with open('tv.txt', 'w', encoding='utf-8') as f:
+        # 生成result.txt文件
+        with open('result.txt', 'w', encoding='utf-8') as f:
             # 写入文件头
             f.write(f"# 直播源重分类结果\n")
             f.write(f"# 生成时间: {beijing_time} (北京时间)\n")
@@ -625,7 +625,7 @@ def reclassify_reclassify_txt():
         debug_log("=== 重分类完成 ===")
         debug_log(f"已分类频道数: {sum(len(channels) for channels in categorized_channels.values())}")
         debug_log(f"未分类频道数: {len(uncategorized_channels)}")
-        debug_log(f"生成文件: tv.txt")
+        debug_log(f"生成文件: result.txt")
         
         return True
         
@@ -684,7 +684,7 @@ def main():
         debug_log(f"总频道数: {channel_count} 个")
         debug_log(f"生成文件: reclassify.txt")
         
-        # 第二阶段：重分类生成tv.txt
+        # 第二阶段：重分类生成result.txt
         debug_log("\n" + "="*50)
         reclassify_success = reclassify_reclassify_txt()
         
@@ -692,16 +692,16 @@ def main():
             debug_log("=== 全部处理完成！ ===")
             debug_log("生成的文件:")
             debug_log("- reclassify.txt (原始分类文件)")
-            debug_log("- tv.txt (重分类后的文件)")
+            debug_log("- result.txt (重分类后的文件)")
             
             # 检查文件是否真的生成
-            if os.path.exists('tv.txt'):
-                with open('tv.txt', 'r', encoding='utf-8') as f:
+            if os.path.exists('result.txt'):
+                with open('result.txt', 'r', encoding='utf-8') as f:
                     tv_content = f.read()
-                debug_log(f"tv.txt 文件大小: {len(tv_content)} 字符")
-                debug_log(f"tv.txt 行数: {len(tv_content.splitlines())}")
+                debug_log(f"result.txt 文件大小: {len(tv_content)} 字符")
+                debug_log(f"result.txt 行数: {len(tv_content.splitlines())}")
             else:
-                debug_log("错误: tv.txt 文件未生成")
+                debug_log("错误: result.txt 文件未生成")
         else:
             debug_log("=== 重分类失败 ===")
         
