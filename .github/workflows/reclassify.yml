@@ -41,7 +41,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add reclassify.txt tv.txt
+          git add reclassify.txt result.txt
           if git diff --staged --quiet; then
             echo "changes=false" >> $GITHUB_OUTPUT
           else
