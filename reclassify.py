@@ -7,44 +7,49 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
+def debug_log(message):
+    """调试日志函数"""
+    beijing_time = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{beijing_time}] {message}")
+
 def download_file(url):
     """下载原始文件"""
-    print(f"正在下载文件: {url}")
+    debug_log(f"正在下载文件: {url}")
     try:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
-        print(f"下载成功，文件大小: {len(response.text)} 字符")
+        debug_log(f"下载成功，文件大小: {len(response.text)} 字符")
         return response.text
     except Exception as e:
-        print(f"下载失败: {e}")
+        debug_log(f"下载失败: {e}")
         return None
 
 def process_content(content):
     """处理内容"""
     if not content:
-        print("内容为空，无法处理")
+        debug_log("内容为空，无法处理")
         return []
         
     lines = content.split('\n')
-    print(f"原始文件行数: {len(lines)}")
+    debug_log(f"原始文件行数: {len(lines)}")
     
     # 1. 删除前两行
     if len(lines) >= 2:
         lines = lines[2:]
-        print(f"删除前两行后行数: {len(lines)}")
+        debug_log(f"删除前两行后行数: {len(lines)}")
     else:
-        print("文件行数不足，无法删除前两行")
+        debug_log("文件行数不足，无法删除前两行")
         return []
     
     # 只返回非空行
     non_empty_lines = [line for line in lines if line.strip()]
-    print(f"非空行数: {len(non_empty_lines)}")
+    debug_log(f"非空行数: {len(non_empty_lines)}")
     
     # 打印前几行作为示例
     if non_empty_lines:
-        print("前5行示例:")
+        debug_log("前5行示例:")
         for i in range(min(5, len(non_empty_lines))):
-            print(f"  {i+1}: {non_empty_lines[i]}")
+            debug_log(f"  {i+1}: {non_empty_lines[i]}")
     
     return non_empty_lines
 
@@ -53,7 +58,7 @@ def parse_groups(lines):
     groups = {}
     current_group = None
     
-    print("开始解析分组...")
+    debug_log("开始解析分组...")
     
     for line in lines:
         line = line.strip()
@@ -68,7 +73,7 @@ def parse_groups(lines):
             group_name = group_name.replace('-组播', '')
             current_group = group_name
             groups[current_group] = []
-            print(f"找到分组: {group_name}")
+            debug_log(f"找到分组: {group_name}")
         elif current_group and ',' in line:
             # 频道行：频道名称,播放地址
             parts = line.split(',', 1)
@@ -76,11 +81,11 @@ def parse_groups(lines):
                 channel_name, channel_url = parts
                 groups[current_group].append((channel_name, channel_url))
     
-    print(f"共解析出 {len(groups)} 个分组")
+    debug_log(f"共解析出 {len(groups)} 个分组")
     
     # 打印分组统计
     for group_name, channels in groups.items():
-        print(f"分组 '{group_name}' 有 {len(channels)} 个频道")
+        debug_log(f"分组 '{group_name}' 有 {len(channels)} 个频道")
     
     return groups
 
@@ -88,7 +93,7 @@ def check_stream(url, timeout=5):
     """
     使用ffprobe检查流有效性
     """
-    print(f"  检测流: {url}")
+    debug_log(f"  检测流: {url}")
     
     try:
         result = subprocess.run(
@@ -102,47 +107,47 @@ def check_stream(url, timeout=5):
         is_valid = b"codec_type" in result.stdout
         
         if is_valid:
-            print(f"    ✓ 流有效")
+            debug_log(f"    ✓ 流有效")
         else:
-            print(f"    ✗ 流无效")
+            debug_log(f"    ✗ 流无效")
             if result.stderr:
                 error_msg = result.stderr.decode('utf-8', errors='ignore')[:100]
-                print(f"    错误信息: {error_msg}")
+                debug_log(f"    错误信息: {error_msg}")
         
         return is_valid
         
     except subprocess.TimeoutExpired:
-        print(f"    ✗ 检测超时")
+        debug_log(f"    ✗ 检测超时")
         return False
     except Exception as e:
-        print(f"    ✗ 检测异常: {e}")
+        debug_log(f"    ✗ 检测异常: {e}")
         return False
 
 def check_group_validity(group_name, channels, timeout=5):
     """检查分组有效性"""
     if not channels:
-        print(f"分组 '{group_name}' 没有频道，跳过")
+        debug_log(f"分组 '{group_name}' 没有频道，跳过")
         return False
     
     # 取第一个频道的播放地址进行检测
     first_channel_url = channels[0][1]
     
-    print(f"检测分组 '{group_name}' 的第一个频道: {first_channel_url}")
+    debug_log(f"检测分组 '{group_name}' 的第一个频道: {first_channel_url}")
     
     is_valid = check_stream(first_channel_url, timeout)
     
     if is_valid:
-        print(f"✓ 分组 '{group_name}' 有效，保留")
+        debug_log(f"✓ 分组 '{group_name}' 有效，保留")
         return True
     else:
-        print(f"✗ 分组 '{group_name}' 无效，删除")
+        debug_log(f"✗ 分组 '{group_name}' 无效，删除")
         return False
 
 def filter_valid_groups(groups, max_workers=5):
     """使用多线程过滤有效的分组"""
     valid_groups = {}
     
-    print("开始多线程检测流有效性...")
+    debug_log("开始多线程检测流有效性...")
     
     # 准备检测任务
     tasks = []
@@ -150,7 +155,7 @@ def filter_valid_groups(groups, max_workers=5):
         if channels:  # 只检测有频道的分组
             tasks.append((group_name, channels))
     
-    print(f"共有 {len(tasks)} 个分组需要检测")
+    debug_log(f"共有 {len(tasks)} 个分组需要检测")
     
     # 使用线程池并行检测
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -168,25 +173,25 @@ def filter_valid_groups(groups, max_workers=5):
                 if is_valid:
                     valid_groups[group_name] = groups[group_name]
             except Exception as e:
-                print(f"检测分组 '{group_name}' 时发生异常: {e}")
+                debug_log(f"检测分组 '{group_name}' 时发生异常: {e}")
     
-    print(f"有效性检测完成，有效分组: {len(valid_groups)} 个")
+    debug_log(f"有效性检测完成，有效分组: {len(valid_groups)} 个")
     return valid_groups
 
 def generate_output(valid_groups):
     """生成输出内容"""
     output_lines = []
     
-    print("生成输出内容...")
+    debug_log("生成输出内容...")
     
     for group_name, channels in valid_groups.items():
-        print(f"处理分组 '{group_name}' 的 {len(channels)} 个频道")
+        debug_log(f"处理分组 '{group_name}' 的 {len(channels)} 个频道")
         for channel_name, channel_url in channels:
             # 在播放地址后加入$所属组名
             output_line = f"{channel_name},{channel_url}${group_name}"
             output_lines.append(output_line)
     
-    print(f"共生成 {len(output_lines)} 行输出")
+    debug_log(f"共生成 {len(output_lines)} 行输出")
     return '\n'.join(output_lines)
 
 # 完整的分类映射（按照您要求的顺序）
@@ -529,10 +534,10 @@ def normalize_channel_name(channel_name):
 def categorize_channels(formatted_channels):
     """根据分类规则重新分类频道"""
     if not formatted_channels:
-        print("没有频道需要分类")
+        debug_log("没有频道需要分类")
         return {}, []
         
-    print("开始分类频道...")
+    debug_log("开始分类频道...")
     categorized = defaultdict(list)
     uncategorized = []
     
@@ -540,6 +545,7 @@ def categorize_channels(formatted_channels):
         # 解析频道行 - 格式是: 频道名称,地址$地区运营商
         match = re.match(r'^([^,]+),([^$]+)\$([^$]+)$', channel_line)
         if not match:
+            debug_log(f"无法解析频道行: {channel_line}")
             continue
             
         channel_name, channel_url, region = match.groups()
@@ -549,7 +555,7 @@ def categorize_channels(formatted_channels):
         categorized_flag = False
         for category, channels in CATEGORY_MAPPING.items():
             if normalized_name in channels:
-                # 存储完整格式：频道名称,地址$地区运营商（不去除任何内容）
+                # 存储完整格式：频道名称,地址$地区运营商
                 categorized[category].append(f'{normalized_name},{channel_url}${region}')
                 categorized_flag = True
                 break
@@ -557,35 +563,39 @@ def categorize_channels(formatted_channels):
         if not categorized_flag:
             uncategorized.append(f'{channel_name},{channel_url}${region}')
     
-    print(f"分类完成: 已分类 {sum(len(channels) for channels in categorized.values())}, 未分类 {len(uncategorized)}")
+    debug_log(f"分类完成: 已分类 {sum(len(channels) for channels in categorized.values())}, 未分类 {len(uncategorized)}")
     return categorized, uncategorized
 
 def reclassify_reclassify_txt():
     """对reclassify.txt进行重分类生成tv.txt"""
     try:
-        print("=== 开始重分类 reclassify.txt ===")
+        debug_log("=== 开始重分类 reclassify.txt ===")
         
         # 读取reclassify.txt文件
         if not os.path.exists('reclassify.txt'):
-            print("错误: reclassify.txt 文件不存在")
+            debug_log("错误: reclassify.txt 文件不存在")
             return False
         
         with open('reclassify.txt', 'r', encoding='utf-8') as f:
             content = f.read()
         
         if not content:
-            print("错误: reclassify.txt 文件为空")
+            debug_log("错误: reclassify.txt 文件为空")
             return False
         
         # 解析频道行
         formatted_channels = [line.strip() for line in content.split('\n') if line.strip()]
-        print(f"从 reclassify.txt 读取到 {len(formatted_channels)} 个频道")
+        debug_log(f"从 reclassify.txt 读取到 {len(formatted_channels)} 个频道")
+        
+        if not formatted_channels:
+            debug_log("错误: reclassify.txt 中没有有效的频道行")
+            return False
         
         # 重分类
         categorized_channels, uncategorized_channels = categorize_channels(formatted_channels)
         
         if not categorized_channels and not uncategorized_channels:
-            print("错误: 重分类后没有频道")
+            debug_log("错误: 重分类后没有频道")
             return False
         
         # 生成北京时间
@@ -612,15 +622,15 @@ def reclassify_reclassify_txt():
                 for channel in uncategorized_channels:
                     f.write(f"{channel}\n")
         
-        print("=== 重分类完成 ===")
-        print(f"已分类频道数: {sum(len(channels) for channels in categorized_channels.values())}")
-        print(f"未分类频道数: {len(uncategorized_channels)}")
-        print(f"生成文件: tv.txt")
+        debug_log("=== 重分类完成 ===")
+        debug_log(f"已分类频道数: {sum(len(channels) for channels in categorized_channels.values())}")
+        debug_log(f"未分类频道数: {len(uncategorized_channels)}")
+        debug_log(f"生成文件: tv.txt")
         
         return True
         
     except Exception as e:
-        print(f"重分类过程中发生错误: {e}")
+        debug_log(f"重分类过程中发生错误: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -630,34 +640,34 @@ def main():
     url = "https://raw.githubusercontent.com/q1017673817/iptvz/main/zubo_all.txt"
     
     try:
-        print("=== 开始处理 ===")
+        debug_log("=== 开始处理 ===")
         start_time = time.time()
         
-        print("步骤1: 下载文件...")
+        debug_log("步骤1: 下载文件...")
         content = download_file(url)
         if not content:
-            print("下载失败，退出")
+            debug_log("下载失败，退出")
             return
         
-        print("步骤2: 处理内容...")
+        debug_log("步骤2: 处理内容...")
         lines = process_content(content)
         if not lines:
-            print("处理内容后没有有效行，退出")
+            debug_log("处理内容后没有有效行，退出")
             return
         
-        print("步骤3: 解析分组...")
+        debug_log("步骤3: 解析分组...")
         groups = parse_groups(lines)
         if not groups:
-            print("没有解析出任何分组，退出")
+            debug_log("没有解析出任何分组，退出")
             return
         
-        print("步骤4: 多线程检测流有效性...")
+        debug_log("步骤4: 多线程检测流有效性...")
         valid_groups = filter_valid_groups(groups, max_workers=10)
         if not valid_groups:
-            print("没有有效的分组，退出")
+            debug_log("没有有效的分组，退出")
             return
         
-        print("步骤5: 生成输出文件...")
+        debug_log("步骤5: 生成输出文件...")
         output_content = generate_output(valid_groups)
         
         # 写入reclassify.txt文件
@@ -668,26 +678,35 @@ def main():
         end_time = time.time()
         processing_time = end_time - start_time
         
-        print(f"=== 第一阶段完成！ ===")
-        print(f"处理时间: {processing_time:.2f} 秒")
-        print(f"有效分组: {len(valid_groups)} 个")
-        print(f"总频道数: {channel_count} 个")
-        print(f"生成文件: reclassify.txt")
+        debug_log(f"=== 第一阶段完成！ ===")
+        debug_log(f"处理时间: {processing_time:.2f} 秒")
+        debug_log(f"有效分组: {len(valid_groups)} 个")
+        debug_log(f"总频道数: {channel_count} 个")
+        debug_log(f"生成文件: reclassify.txt")
         
         # 第二阶段：重分类生成tv.txt
-        print("\n" + "="*50)
+        debug_log("\n" + "="*50)
         reclassify_success = reclassify_reclassify_txt()
         
         if reclassify_success:
-            print("=== 全部处理完成！ ===")
-            print("生成的文件:")
-            print("- reclassify.txt (原始分类文件)")
-            print("- tv.txt (重分类后的文件)")
+            debug_log("=== 全部处理完成！ ===")
+            debug_log("生成的文件:")
+            debug_log("- reclassify.txt (原始分类文件)")
+            debug_log("- tv.txt (重分类后的文件)")
+            
+            # 检查文件是否真的生成
+            if os.path.exists('tv.txt'):
+                with open('tv.txt', 'r', encoding='utf-8') as f:
+                    tv_content = f.read()
+                debug_log(f"tv.txt 文件大小: {len(tv_content)} 字符")
+                debug_log(f"tv.txt 行数: {len(tv_content.splitlines())}")
+            else:
+                debug_log("错误: tv.txt 文件未生成")
         else:
-            print("=== 重分类失败 ===")
+            debug_log("=== 重分类失败 ===")
         
     except Exception as e:
-        print(f"错误: {e}")
+        debug_log(f"错误: {e}")
         import traceback
         traceback.print_exc()
         exit(1)
