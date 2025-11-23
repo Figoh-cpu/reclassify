@@ -83,59 +83,94 @@ def parse_groups(lines):
     
     return groups
 
-def check_stream(url, timeout=5):
+def check_stream(url, timeout=8):
     """
-    使用ffprobe检查流有效性
+    使用ffprobe检查流有效性 - 优化版本
     """
     print(f"  检测流: {url}")
     
     try:
+        # 使用更宽松的参数检测流
         result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_streams", "-i", url],
+            [
+                "ffprobe", 
+                "-v", "quiet",
+                "-probesize", "32",
+                "-analyzeduration", "1000000",  # 1秒
+                "-select_streams", "v:0",  # 只检测视频流
+                "-show_entries", "stream=codec_type",
+                "-of", "csv=p=0",
+                "-i", url
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=timeout + 2
+            timeout=timeout
         )
         
-        # 如果输出中包含"codec_type"，则认为流有效
-        is_valid = b"codec_type" in result.stdout
-        
-        if is_valid:
-            print(f"    ✓ 流有效")
+        # 检查返回码和输出
+        if result.returncode == 0:
+            # 检查输出中是否包含视频流
+            output = result.stdout.decode('utf-8', errors='ignore').strip()
+            is_valid = "video" in output.lower()
+            
+            if is_valid:
+                print(f"    ✓ 流有效")
+            else:
+                print(f"    ✗ 流无效 - 无视频流")
+                if result.stderr:
+                    error_msg = result.stderr.decode('utf-8', errors='ignore')[:200]
+                    print(f"    错误信息: {error_msg}")
+            
+            return is_valid
         else:
-            print(f"    ✗ 流无效")
+            print(f"    ✗ 流无效 - 返回码: {result.returncode}")
             if result.stderr:
-                error_msg = result.stderr.decode('utf-8', errors='ignore')[:100]
+                error_msg = result.stderr.decode('utf-8', errors='ignore')[:200]
                 print(f"    错误信息: {error_msg}")
-        
-        return is_valid
+            return False
         
     except subprocess.TimeoutExpired:
-        print(f"    ✗ 检测超时")
+        print(f"    ✗ 检测超时 ({timeout}秒)")
+        return False
+    except FileNotFoundError:
+        print(f"    ✗ 未找到ffprobe，请安装ffmpeg")
         return False
     except Exception as e:
         print(f"    ✗ 检测异常: {e}")
         return False
 
-def check_group_validity(group_name, channels, timeout=5):
-    """检查分组有效性"""
+def check_group_validity(group_name, channels, timeout=8):
+    """检查分组有效性 - 优化版本"""
     if not channels:
         print(f"分组 '{group_name}' 没有频道，跳过")
         return False
     
-    # 取第一个频道的播放地址进行检测
-    first_channel_url = channels[0][1]
+    # 尝试检测前3个频道，只要有一个有效就认为分组有效
+    print(f"检测分组 '{group_name}' 的频道...")
     
-    print(f"检测分组 '{group_name}' 的第一个频道: {first_channel_url}")
+    valid_count = 0
+    tested_count = min(3, len(channels))  # 最多测试3个频道
     
-    is_valid = check_stream(first_channel_url, timeout)
+    for i in range(tested_count):
+        channel_name, channel_url = channels[i]
+        print(f"  测试频道 {i+1}/{tested_count}: {channel_name}")
+        
+        is_valid = check_stream(channel_url, timeout)
+        if is_valid:
+            valid_count += 1
+            print(f"  ✓ 频道有效，分组标记为有效")
+            break  # 只要有一个有效就认为分组有效
+        else:
+            print(f"  ✗ 频道无效")
     
-    if is_valid:
+    is_group_valid = valid_count > 0
+    
+    if is_group_valid:
         print(f"✓ 分组 '{group_name}' 有效，保留")
-        return True
     else:
         print(f"✗ 分组 '{group_name}' 无效，删除")
-        return False
+    
+    return is_group_valid
 
 def filter_valid_groups(groups, max_workers=5):
     """使用多线程过滤有效的分组"""
@@ -173,8 +208,9 @@ def filter_valid_groups(groups, max_workers=5):
     return valid_groups
 
 def load_category_mapping():
-    """加载频道分类映射"""
-    category_mapping = {
+    """加载频道分类映射 - 完整版本"""
+    # 完整的分类映射
+    CATEGORY_MAPPING = {
         "央视频道,#genre#": [
             "CCTV-1综合","CCTV-2财经","CCTV-3综艺","CCTV-4中文国际","CCTV-5体育","CCTV-5+体育赛事",
             "CCTV-6电影","CCTV-7国防军事","CCTV-8电视剧","CCTV-9纪录","CCTV-10科教","CCTV-11戏曲",
@@ -434,7 +470,8 @@ def load_category_mapping():
         "其他频道,#genre#": []
     }
 
-    channel_name_mapping = {
+    # 简化的频道名称映射
+    CHANNEL_NAME_MAPPING = {
         "CCTV-1综合": ["CCTV-1综合"],
         "CCTV-2财经": ["CCTV-2财经"],
         "CCTV-3综艺": ["CCTV-3综艺"],
@@ -645,28 +682,22 @@ def load_category_mapping():
         "开州综合": ["开州综合"]
     }
     
-    return category_mapping, channel_name_mapping
+    return CATEGORY_MAPPING, CHANNEL_NAME_MAPPING
 
 def normalize_channel_name(channel_name, channel_name_mapping):
-    """标准化频道名称"""
+    """标准化频道名称 - 只使用精确匹配"""
     channel_name = channel_name.strip()
     
-    # 首先尝试精确匹配
+    # 精确匹配：查找频道名称是否在映射的别名中
     for standard_name, aliases in channel_name_mapping.items():
         if channel_name in aliases:
             return standard_name
-    
-    # 然后尝试模糊匹配（包含关系）
-    for standard_name, aliases in channel_name_mapping.items():
-        for alias in aliases:
-            if alias in channel_name or channel_name in alias:
-                return standard_name
     
     # 如果没有找到匹配，返回原名称
     return channel_name
 
 def classify_channels(valid_groups, category_mapping, channel_name_mapping):
-    """对频道进行分类"""
+    """对频道进行分类 - 使用完整的频道分类规则"""
     classified_channels = {category: [] for category in category_mapping.keys()}
     
     print("开始频道重分类...")
@@ -681,6 +712,12 @@ def classify_channels(valid_groups, category_mapping, channel_name_mapping):
     
     print(f"共处理 {len(channel_lines)} 个频道")
     
+    # 构建反向映射，便于快速查找
+    reverse_category_map = {}
+    for category, channels_in_category in category_mapping.items():
+        for channel in channels_in_category:
+            reverse_category_map[channel] = category
+    
     for line in channel_lines:
         line = line.strip()
         if not line:
@@ -692,15 +729,11 @@ def classify_channels(valid_groups, category_mapping, channel_name_mapping):
             if len(parts) == 2:
                 channel_name, rest = parts
                 
-                # 标准化频道名称
+                # 1. 首先使用频道名称映射规则标准化频道名称
                 normalized_name = normalize_channel_name(channel_name, channel_name_mapping)
                 
-                # 查找对应的分类
-                found_category = None
-                for category, channels_in_category in category_mapping.items():
-                    if normalized_name in channels_in_category:
-                        found_category = category
-                        break
+                # 2. 然后使用标准化后的名称查找分类
+                found_category = reverse_category_map.get(normalized_name)
                 
                 # 如果没找到分类，放入"其他频道"
                 if not found_category:
