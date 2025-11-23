@@ -606,7 +606,7 @@ def reclassify_reclassify_txt():
             # 写入文件头
             f.write(f"# 直播源重分类结果\n")
             f.write(f"# 生成时间: {beijing_time} (北京时间)\n")
-            f.write(f"# 数据来源: reclassify.txt\n\n")
+            f.write(f"# 数据来源: https://github.com/q1017673817/iptvz/blob/main/zubo_all.txt\n\n")
             
             # 按照CATEGORY_MAPPING的顺序输出分类
             for category in CATEGORY_MAPPING.keys():
