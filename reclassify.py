@@ -4,7 +4,7 @@ import os
 import re
 import concurrent.futures
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def download_file(url):
     """下载原始文件"""
@@ -715,13 +715,20 @@ def classify_channels(valid_groups, category_mapping, channel_name_mapping):
     
     return classified_channels
 
+def get_beijing_time():
+    """获取北京时间（不使用pytz）"""
+    # 获取UTC时间
+    utc_now = datetime.utcnow()
+    # 转换为北京时间（UTC+8）
+    beijing_time = utc_now + timedelta(hours=8)
+    return beijing_time.strftime('%Y-%m-%d %H:%M:%S')
+
 def generate_reclassify_file(classified_channels, output_file):
     """生成reclassify.txt文件"""
     print(f"生成 {output_file}...")
     
     # 获取北京时间
-    beijing_tz = pytz.timezone('Asia/Shanghai')
-    beijing_time = datetime.now(beijing_tz).strftime('%Y-%m-%d %H:%M:%S')
+    beijing_time = get_beijing_time()
     
     output_lines = [f"# 生成时间: {beijing_time} (北京时间)"]
     
