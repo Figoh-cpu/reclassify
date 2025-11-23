@@ -35,12 +35,8 @@ def process_content(content):
         print("文件行数不足，无法删除前两行")
         return []
     
-    # 2. 删除所有包含"-组播"的行
-    filtered_lines = [line for line in lines if '-组播' not in line]
-    print(f"删除'-组播'行后行数: {len(filtered_lines)}")
-    
     # 只返回非空行
-    non_empty_lines = [line for line in filtered_lines if line.strip()]
+    non_empty_lines = [line for line in lines if line.strip()]
     print(f"非空行数: {len(non_empty_lines)}")
     
     # 打印前几行作为示例
@@ -65,7 +61,10 @@ def parse_groups(lines):
             
         # 检查是否是分组行
         if line.endswith(',#genre#'):
+            # 提取组名并删除"-组播"字符串
             group_name = line.split(',')[0]
+            # 删除组名中的"-组播"字符串
+            group_name = group_name.replace('-组播', '')
             current_group = group_name
             groups[current_group] = []
             print(f"找到分组: {group_name}")
@@ -87,7 +86,6 @@ def parse_groups(lines):
 def check_stream(url, timeout=5):
     """
     使用ffprobe检查流有效性
-    参考fofa_fetch.py中的检测方法
     """
     print(f"  检测流: {url}")
     
