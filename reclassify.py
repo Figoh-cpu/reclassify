@@ -549,7 +549,7 @@ def normalize_channel_name(channel_name, channel_name_mapping):
     return channel_name_clean
 
 def classify_channels(valid_groups, category_mapping, channel_name_mapping):
-    """对频道进行分类 - 与process_live_sources.py规则保持一致"""
+    """对频道进行分类 - 改进版本"""
     classified_channels = {category: [] for category in category_mapping.keys()}
     uncategorized_channels = []
     
@@ -565,30 +565,57 @@ def classify_channels(valid_groups, category_mapping, channel_name_mapping):
     
     print(f"共处理 {len(channel_lines)} 个频道")
     
-    # 分类逻辑 - 与process_live_sources.py保持一致
-    for channel_line in channel_lines:
+    # 构建反向映射，便于快速查找
+    reverse_category_map = {}
+    for category, channels_in_category in category_mapping.items():
+        for channel in channels_in_category:
+            reverse_category_map[channel] = category
+    
+    # 构建别名到标准名称的映射
+    alias_to_standard = {}
+    for standard_name, aliases in channel_name_mapping.items():
+        for alias in aliases:
+            alias_to_standard[alias] = standard_name
+    
+    # 分类逻辑
+    for line in channel_lines:
+        line = line.strip()
+        if not line:
+            continue
+            
         # 解析频道行 - 格式是: 频道名称,地址$所属组名
-        match = re.match(r'^([^,]+),([^$]+)\$([^$]+)$', channel_line)
+        match = re.match(r'^([^,]+),([^$]+)\$([^$]+)$', line)
         if not match:
             continue
             
         channel_name, channel_url, group_name = match.groups()
-        normalized_name = normalize_channel_name(channel_name, channel_name_mapping)
         
-        # 查找分类
-        categorized_flag = False
-        for category, channels in category_mapping.items():
-            if normalized_name in channels:
-                classified_channels[category].append(channel_line)
-                categorized_flag = True
-                break
+        # 1. 首先检查频道名称是否直接匹配分类中的标准名称
+        found_category = reverse_category_map.get(channel_name)
         
-        if not categorized_flag:
-            uncategorized_channels.append(channel_line)
-    
-    # 将未分类的频道放入"其他频道"
-    if uncategorized_channels:
-        classified_channels["其他频道,#genre#"] = uncategorized_channels
+        # 2. 如果没有直接匹配，使用频道名称映射规则标准化频道名称
+        if not found_category:
+            # 查找别名映射
+            standard_name = alias_to_standard.get(channel_name)
+            if standard_name:
+                # 使用映射后的标准名称查找分类
+                found_category = reverse_category_map.get(standard_name)
+                print(f"频道映射: '{channel_name}' -> '{standard_name}' -> '{found_category}'")
+            else:
+                # 尝试模糊匹配
+                for standard_name in reverse_category_map.keys():
+                    if standard_name.lower() in channel_name.lower() or channel_name.lower() in standard_name.lower():
+                        found_category = reverse_category_map.get(standard_name)
+                        print(f"模糊匹配: '{channel_name}' -> '{standard_name}' -> '{found_category}'")
+                        break
+        
+        # 3. 如果还没找到分类，放入"其他频道"
+        if not found_category:
+            found_category = "其他频道,#genre#"
+            print(f"未分类频道: '{channel_name}'")
+        
+        # 将完整的行添加到对应分类
+        classified_channels[found_category].append(line)
     
     # 统计各分类的频道数量
     for category, channels in classified_channels.items():
