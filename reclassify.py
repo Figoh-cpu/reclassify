@@ -5,7 +5,6 @@ import re
 import concurrent.futures
 import time
 from datetime import datetime
-import pytz
 
 def download_file(url):
     """下载原始文件"""
